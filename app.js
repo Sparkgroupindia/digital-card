@@ -1,18 +1,141 @@
-const C=window.APP_CONFIG,app=document.getElementById('app');
-const q=new URLSearchParams(location.search);let createFiles={photo:null,logo:null};
-function esc(s=''){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function toast(s){const t=document.getElementById('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',3000)}
-function api(params){return new Promise((resolve,reject)=>{const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*1e5),s=document.createElement('script');function done(){delete window[cb];s.remove()}window[cb]=d=>{done();resolve(d)};s.onerror=()=>{done();reject(Error('API connection failed'))};params.callback=cb;s.src=C.API_URL+'?'+new URLSearchParams(params);document.body.appendChild(s)})}
-function shell(x){app.innerHTML=`<main class="shell"><header class="top"><div class="brand">⚡ SPARK <span>DIGITAL CARD</span></div></header>${x}</main>`}
-function steps(n){return `<div class="steps"><b class="step ${n>=1?'on':''}">1</b><i class="line ${n>=2?'on':''}"></i><b class="step ${n>=2?'on':''}">2</b><i class="line ${n>=3?'on':''}"></i><b class="step ${n>=3?'on':''}">3</b></div>`}
-if(q.get('card'))showCard(q.get('card'));else if(q.get('edit'))editCard(q.get('edit'),q.get('token'));else createPage();
-function createPage(){shell(`<div class="pad"><h1 class="title">Create Digital Card</h1><div class="sub">3 days free • Public card • Private edit panel</div>${steps(1)}<form id="f"><div class="panel"><h3>Basic Details</h3>${fields({})}</div><div class="panel"><h3>Photo & Logo</h3><div class="uploadbox"><b>Profile Photo</b><div class="hint">JPG/PNG/WEBP up to 20 MB → auto compressed to approx. 100–150 KB</div><input id="photo" type="file" accept="image/*"><img id="photoPrev" class="previewThumb"></div><div class="uploadbox"><b>Business Logo</b><div class="hint">Up to 20 MB → auto compressed before Drive upload</div><input id="logo" type="file" accept="image/*"><img id="logoPrev" class="previewThumb"></div></div><button class="btn">Create My Digital Card</button></form><div id="result"></div></div>`);bindPreview('photo','photoPrev','photo');bindPreview('logo','logoPrev','logo');document.getElementById('f').onsubmit=createSubmit}
-function bindPreview(input,img,key){document.getElementById(input).onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>20*1024*1024){e.target.value='';return toast('Maximum image size 20 MB hai')}createFiles[key]=f;const im=document.getElementById(img);im.src=URL.createObjectURL(f);im.style.display='block'}}
-function fields(c){return `<div class="grid"><div class="field"><label>Your Name *</label><input name="name" required value="${esc(c.Name)}"></div><div class="field"><label>Business Name *</label><input name="businessName" required value="${esc(c.BusinessName)}"></div></div><div class="grid"><div class="field"><label>Designation</label><input name="designation" value="${esc(c.Designation)}"></div><div class="field"><label>Category</label><input name="category" value="${esc(c.Category)}"></div></div><div class="grid"><div class="field"><label>Mobile *</label><input name="mobile" required inputmode="tel" value="${esc(c.Mobile)}"></div><div class="field"><label>WhatsApp</label><input name="whatsapp" inputmode="tel" value="${esc(c.WhatsApp)}"></div></div><div class="field"><label>Email</label><input name="email" type="email" value="${esc(c.Email)}"></div><div class="field"><label>Website</label><input name="website" value="${esc(c.Website)}"></div><div class="field"><label>Address</label><textarea name="address">${esc(c.Address)}</textarea></div><div class="field"><label>About Business</label><textarea name="about">${esc(c.About)}</textarea></div><div class="grid"><div class="field"><label>Instagram</label><input name="instagram" value="${esc(c.Instagram)}"></div><div class="field"><label>Facebook</label><input name="facebook" value="${esc(c.Facebook)}"></div></div><div class="field"><label>Google Map Link</label><input name="mapURL" value="${esc(c.MapURL)}"></div><div class="field"><label>Theme</label><select name="theme"><option value="gold">Luxury Black Gold</option><option value="blue">Royal Blue</option><option value="white">Minimal White</option></select></div>`}
-async function createSubmit(e){e.preventDefault();const b=e.submitter;b.disabled=true;b.textContent='Creating card…';try{const p=Object.fromEntries(new FormData(e.target));p.action='create';const r=await api(p);if(!r.ok)throw Error(r.error);if(createFiles.photo){b.textContent='Uploading photo…';await uploadFile(r.id,r.token,createFiles.photo,'photoURL',x=>b.textContent='Photo '+x+'%')}if(createFiles.logo){b.textContent='Uploading logo…';await uploadFile(r.id,r.token,createFiles.logo,'logoURL',x=>b.textContent='Logo '+x+'%')}shell(`<div class="pad">${steps(3)}<div class="panel good"><h2>✓ Your Digital Card is Ready!</h2><p>Free validity: 3 days</p><a class="resultLink" href="${esc(r.publicURL)}">View Public Card</a><a class="resultLink" href="${esc(r.editURL)}">Open Private Edit Panel</a><button class="btn green" id="share">Share on WhatsApp</button><br><br><button class="btn alt" id="copy">Copy Edit Link</button></div></div>`);document.getElementById('copy').onclick=()=>navigator.clipboard.writeText(r.editURL).then(()=>toast('Edit link copied'));document.getElementById('share').onclick=()=>open('https://wa.me/?text='+encodeURIComponent('My Digital Business Card: '+r.publicURL),'_blank')}catch(x){toast(x.message);b.disabled=false;b.textContent='Create My Digital Card'}}
-async function showCard(id){try{const r=await api({action:'get',id});if(!r.ok)throw Error(r.error);const c=r.card;if(!c.isValid){shell(`<div class="pad"><div class="notice bad"><b>Card Expired / Inactive</b><br>Is demo card ki validity khatam ho chuki hai.</div></div>`);return}const phone=String(c.Mobile??'').replace(/\D/g,''),wa=String(c.WhatsApp||c.Mobile||'').replace(/\D/g,'');shell(`<section class="hero">${c.LogoURL?`<img class="bizlogo" src="${esc(c.LogoURL)}">`:''}<h1>${esc(c.BusinessName)}</h1><div class="gold">${esc(c.Category)}</div>${c.PhotoURL?`<img class="avatar" src="${esc(c.PhotoURL)}">`:''}<div class="person"><h2>${esc(c.Name)}</h2><div>${esc(c.Designation)}</div></div></section><div class="actions"><a class="action" href="tel:${phone}"><i>☎</i>Call</a><a class="action" href="https://wa.me/${wa}"><i>◉</i>WhatsApp</a><a class="action" href="${esc(c.MapURL||'#')}"><i>●</i>Direction</a><a class="action" href="${esc(c.Website||'#')}"><i>◎</i>Website</a></div><a class="productBtn" href="#about">View Business Details</a><section class="section" id="about"><h3>About Us</h3><div>${esc(c.About)||'Welcome to '+esc(c.BusinessName)}</div></section><section class="section"><h3>Contact & Location</h3><div>${esc(c.Address)}</div><div>${esc(c.Email)}</div></section><section class="section small muted">Card ID: ${esc(c.CardID)} • Valid till ${new Date(c.ValidTill).toLocaleDateString()}</section>`)}catch(x){shell(`<div class="pad"><div class="notice bad">${esc(x.message)}</div></div>`)}}
-async function editCard(id,token){if(!token)return shell(`<div class="pad"><div class="notice bad">Invalid edit link.</div></div>`);try{const r=await api({action:'getForEdit',id,token});if(!r.ok)throw Error(r.error);const c=r.card;shell(`<div class="dashHead"><span class="status">ACTIVE</span><h2>My Card Dashboard</h2><div class="small">${esc(c.BusinessName)} • ${esc(id)}</div></div><div class="pad"><div class="menu"><a href="#edit"><span class="ico">✎</span>Edit Basic Details</a><a href="#images"><span class="ico">▣</span>Change Photo / Logo</a><a href="?card=${encodeURIComponent(id)}"><span class="ico">◉</span>View Public Card</a></div><br><form id="ef" class="panel"><h3 id="edit">Edit Details</h3>${fields(c)}<button class="btn">Save Changes</button></form><div class="panel" id="images"><h3>Photo / Logo Upload</h3><div class="notice">Maximum source file <b>20 MB</b>. Browser pehle compress karega aur Drive me approx. <b>100–150 KB</b> file save hogi.</div><div class="field"><input id="img" type="file" accept="image/*"></div><div class="field"><select id="kind"><option value="photoURL">Profile Photo</option><option value="logoURL">Business Logo</option></select></div><button class="btn alt" id="up" type="button">Compress & Upload</button></div></div>`);document.getElementById('ef').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{const p=Object.fromEntries(new FormData(e.target));Object.assign(p,{action:'update',id,token});const z=await api(p);if(!z.ok)throw Error(z.error);toast('Saved ✓')}catch(x){toast(x.message)}finally{b.disabled=false}};document.getElementById('up').onclick=async()=>{const f=document.getElementById('img').files[0];if(!f)return toast('Choose image');if(f.size>20*1024*1024)return toast('Maximum 20 MB image allowed');const b=document.getElementById('up');b.disabled=true;try{await uploadFile(id,token,f,document.getElementById('kind').value,x=>b.textContent='Uploading '+x+'%');b.textContent='Uploaded ✓';toast('Image Drive me save ho gayi ✓');setTimeout(()=>location.reload(),800)}catch(x){toast(x.message);b.disabled=false;b.textContent='Compress & Upload'}}}catch(x){shell(`<div class="pad"><div class="notice bad">${esc(x.message)}</div></div>`)}}
-async function uploadFile(id,token,file,kind,progress){const data=await compressTarget(file,100*1024,150*1024);const m=data.match(/^data:(image\/jpeg);base64,(.+)$/);if(!m)throw Error('Image compression failed');const base64=m[2],uploadId='u_'+Date.now()+'_'+Math.random().toString(36).slice(2),chunkSize=18000,total=Math.ceil(base64.length/chunkSize);let r=await api({action:'uploadStart',id,token,uploadId,mime:m[1],total});if(!r.ok)throw Error(r.error);for(let i=0;i<total;i++){r=await api({action:'uploadChunk',id,token,uploadId,index:i,chunk:base64.slice(i*chunkSize,(i+1)*chunkSize)});if(!r.ok)throw Error(r.error);progress?.(Math.round((i+1)/total*90))}r=await api({action:'uploadFinish',id,token,uploadId,mime:m[1],total});if(!r.ok)throw Error(r.error);const u={action:'update',id,token};u[kind]=r.url;const z=await api(u);if(!z.ok)throw Error(z.error);progress?.(100);return r.url}
-function loadImage(file){return new Promise((res,rej)=>{const im=new Image(),u=URL.createObjectURL(file);im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=rej;im.src=u})}
-async function compressTarget(file,minB,maxB){const im=await loadImage(file);let maxDim=1400;for(let pass=0;pass<8;pass++){let w=im.naturalWidth,h=im.naturalHeight,s=Math.min(1,maxDim/Math.max(w,h));w=Math.max(1,Math.round(w*s));h=Math.max(1,Math.round(h*s));const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d',{alpha:false}).drawImage(im,0,0,w,h);let lo=.28,hi=.9,best=null;for(let i=0;i<8;i++){const qu=(lo+hi)/2,d=c.toDataURL('image/jpeg',qu),bytes=Math.floor((d.length-d.indexOf(',')-1)*.75);if(bytes>maxB)hi=qu;else{best=d;lo=qu}}if(best){const bytes=Math.floor((best.length-best.indexOf(',')-1)*.75);if(bytes>=minB||maxDim<=700)return best}maxDim=Math.round(maxDim*.82)}const c=document.createElement('canvas'),s=Math.min(1,700/Math.max(im.naturalWidth,im.naturalHeight));c.width=Math.round(im.naturalWidth*s);c.height=Math.round(im.naturalHeight*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',.55)}
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+
+const C=window.APP_CONFIG;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const val=(o,k,d="")=>o&&o[k]!=null?String(o[k]):d;
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
+function apiReady(){return C.API_URL && !C.API_URL.includes("PASTE_")}
+async function api(action,data={}){
+  if(!apiReady()) throw new Error("config.js me Apps Script /exec URL paste karein.");
+  const body=new URLSearchParams({action,payload:JSON.stringify(data)});
+  const r=await fetch(C.API_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body});
+  const j=await r.json(); if(!j.ok) throw new Error(j.message||"API error"); return j.data;
+}
+async function compressImage(file,targetKB=C.TARGET_IMAGE_KB){
+  if(!file) return "";
+  if(file.size>C.MAX_SOURCE_MB*1024*1024) throw new Error(`Image ${C.MAX_SOURCE_MB}MB se kam honi chahiye.`);
+  const bitmap=await createImageBitmap(file);
+  let max=1200, scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+  let w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale);
+  const canvas=document.createElement("canvas"); canvas.width=w;canvas.height=h;
+  canvas.getContext("2d").drawImage(bitmap,0,0,w,h);
+  let q=.82, blob;
+  for(let i=0;i<12;i++){
+    blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",q));
+    if(blob.size<=targetKB*1024 || q<=.32) break;
+    q-=.06;
+  }
+  if(blob.size>targetKB*1024){
+    const ratio=Math.sqrt((targetKB*1024)/blob.size)*.94;
+    const c2=document.createElement("canvas"); c2.width=Math.max(420,Math.round(w*ratio));c2.height=Math.max(420,Math.round(h*ratio));
+    c2.getContext("2d").drawImage(canvas,0,0,c2.width,c2.height);
+    blob=await new Promise(r=>c2.toBlob(r,"image/jpeg",.68));
+  }
+  return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)});
+}
+function shell(content,sub="Create • Share • Edit Anytime"){
+  $("#app").innerHTML=`<main class="shell"><header class="top"><div class="brand">SPARK <b>DIGITAL CARD</b></div><div class="sub">${sub}</div></header>${content}</main>`;
+}
+function route(){
+  const p=new URLSearchParams(location.search);
+  if(p.has("admin")) return adminLogin();
+  if(p.get("edit")) return editLogin(p.get("edit"));
+  if(p.get("id")) return publicCard(p.get("id"));
+  return createForm();
+}
+function createForm(){
+ shell(`<div class="wrap">
+  <div class="panel"><div class="title">Create Digital Business Card</div><p class="hint">Customer ki details aur photo/logo upload karein. Image browser me compress hokar approx. 100–150 KB me Drive par save hogi.</p>
+  <div class="steps"><i class="step on"></i><i class="step on"></i><i class="step on"></i></div>
+  <form id="create" class="grid">
+   <div class="upload"><img id="photoPrev" src="https://placehold.co/200x200?text=Photo"><b>Profile Photo *</b><div class="small">JPG/PNG/WebP • source max ${C.MAX_SOURCE_MB}MB</div><input id="photo" type="file" accept="image/*" required></div>
+   <div class="upload"><img id="logoPrev" src="https://placehold.co/200x200?text=Logo"><b>Business Logo</b><div class="small">Optional</div><input id="logo" type="file" accept="image/*"></div>
+   <div class="field"><label>Your Name *</label><input name="name" required></div>
+   <div class="field"><label>Business Name *</label><input name="business" required></div>
+   <div class="grid grid2"><div class="field"><label>Mobile *</label><input name="mobile" inputmode="numeric" required></div><div class="field"><label>WhatsApp</label><input name="whatsapp" inputmode="numeric"></div></div>
+   <div class="grid grid2"><div class="field"><label>Designation</label><input name="designation" placeholder="Proprietor"></div><div class="field"><label>Category</label><input name="category" placeholder="Jewellery Shop"></div></div>
+   <div class="field"><label>Tagline</label><input name="tagline" placeholder="Gold | Diamond | Silver"></div>
+   <div class="field"><label>About Business</label><textarea name="about"></textarea></div>
+   <div class="field"><label>Address</label><textarea name="address"></textarea></div>
+   <div class="field"><label>Google Maps Link</label><input name="map"></div>
+   <div class="field"><label>Website</label><input name="website"></div>
+   <div class="grid grid2"><div class="field"><label>Instagram</label><input name="instagram"></div><div class="field"><label>Facebook</label><input name="facebook"></div></div>
+   <button class="btn primary full" type="submit">Create Card →</button>
+  </form></div></div>`);
+ const bind=(id,pid)=>$("#"+id).onchange=e=>{if(e.target.files[0]) $("#"+pid).src=URL.createObjectURL(e.target.files[0])}; bind("photo","photoPrev");bind("logo","logoPrev");
+ $("#create").onsubmit=async e=>{
+   e.preventDefault(); const b=e.submitter;b.disabled=true;b.textContent="Compressing & Creating...";
+   try{
+     const f=new FormData(e.target), data=Object.fromEntries(f.entries()); delete data.photo;delete data.logo;
+     data.photoData=await compressImage($("#photo").files[0]);
+     if($("#logo").files[0]) data.logoData=await compressImage($("#logo").files[0],120);
+     const out=await api("createCard",data); showReady(out);
+   }catch(err){toast(err.message)}finally{b.disabled=false;b.textContent="Create Card →"}
+ };
+}
+function showReady(o){
+ shell(`<div class="wrap"><div class="panel" style="text-align:center;padding:28px 18px"><div style="font-size:70px">✅</div><div class="title">Your Digital Card is Ready!</div><p class="hint">Card ID: <b>${esc(o.id)}</b> • Free validity ${C.FREE_VALIDITY_DAYS} days</p>
+ <div class="field"><input id="publicLink" readonly value="${esc(o.publicUrl)}"></div>
+ <div class="actions"><button class="btn green" id="wa">WhatsApp</button><button class="btn blue" id="copy">Copy Link</button></div>
+ <br><div class="field"><label>Customer Edit Link</label><input id="editLink" readonly value="${esc(o.editUrl)}"></div>
+ <p class="small">Edit PIN customer ko private rakhein: <b>${esc(o.editPin)}</b></p>
+ <button class="btn ghost full" onclick="location.href='${esc(o.publicUrl)}'">View Card</button></div></div>`);
+ $("#copy").onclick=()=>navigator.clipboard.writeText(o.publicUrl).then(()=>toast("Link copied"));
+ $("#wa").onclick=()=>open("https://wa.me/?text="+encodeURIComponent("My Digital Business Card: "+o.publicUrl),"_blank");
+}
+async function publicCard(id){
+ shell(`<div class="loading">Loading digital card...</div>`,"Public Digital Business Card");
+ try{const c=await api("getCard",{id}); renderCard(c)}catch(e){shell(`<div class="wrap"><div class="panel empty"><h2>Card unavailable</h2><p>${esc(e.message)}</p></div></div>`)}
+}
+function renderCard(c){
+ const phone=val(c,"Mobile").replace(/\D/g,""), wa=(val(c,"WhatsApp")||phone).replace(/\D/g,"");
+ shell(`<div class="wrap"><div class="preview-card">
+ <section class="hero">${c.LogoURL?`<img class="logo-circle" src="${esc(c.LogoURL)}">`:`<div style="font-size:52px">♛</div>`}<div class="business">${esc(c.BusinessName)}</div><div class="tagline">${esc(c.Tagline)}</div></section>
+ <section class="white-area"><div class="person"><img src="${esc(c.PhotoURL||"https://placehold.co/200x200?text=Photo")}"><h2>${esc(c.Name)}</h2><p>${esc(c.Designation||c.Category)}</p></div>
+ <div class="contact-row">
+ <a class="round call" href="tel:${phone}">☎</a><a class="round wa" href="https://wa.me/91${wa.replace(/^91/,"")}" target="_blank">◉</a>
+ ${c.MapLink?`<a class="round map" href="${esc(c.MapLink)}" target="_blank">⌖</a>`:""}${c.Website?`<a class="round web" href="${esc(c.Website)}" target="_blank">◎</a>`:""}
+ </div>
+ ${c.About?`<div class="section-title">About Us</div><div class="hint">${esc(c.About)}</div>`:""}
+ ${c.Address?`<div class="section-title">Our Location</div><div class="hint">${esc(c.Address)}</div>`:""}
+ <div class="section-title">Share Card</div><div class="actions"><button class="btn green" onclick="open('https://wa.me/?text='+encodeURIComponent(location.href),'_blank')">WhatsApp</button><button class="btn blue" onclick="navigator.share?navigator.share({title:'${esc(c.BusinessName)}',url:location.href}):navigator.clipboard.writeText(location.href)">Share</button></div>
+ </section></div></div>`,"Digital Business Card");
+}
+function editLogin(id){
+ shell(`<div class="wrap"><div class="panel"><div class="title">Customer Edit Panel</div><p class="hint">Card ID: ${esc(id)}</p><form id="elog" class="grid"><div class="field"><label>Edit PIN</label><input name="pin" inputmode="numeric" required></div><button class="btn primary full">Login</button></form></div></div>`);
+ $("#elog").onsubmit=async e=>{e.preventDefault();try{const pin=new FormData(e.target).get("pin");const c=await api("editLogin",{id,pin}); editPanel(c,pin)}catch(x){toast(x.message)}};
+}
+function editPanel(c,pin){
+ shell(`<div class="wrap"><div class="panel"><div class="title">My Card Dashboard</div><p><span class="status ${esc(c.Status)}">${esc(c.Status)}</span> &nbsp; Valid Till: <b>${esc(c.ValidTill)}</b></p>
+ <div class="actions"><button class="btn blue" onclick="location.href='?id=${encodeURIComponent(c.CardID)}'">View Card</button><button class="btn green" id="shareEdit">Share</button></div></div>
+ <div class="panel"><form id="editForm" class="grid">
+ <div class="upload"><img id="eprev" src="${esc(c.PhotoURL||"https://placehold.co/200x200?text=Photo")}"><b>Change Profile Photo</b><input id="ephoto" type="file" accept="image/*"></div>
+ ${["Name","BusinessName","Mobile","WhatsApp","Designation","Category","Tagline","Website","MapLink","Instagram","Facebook"].map(k=>`<div class="field"><label>${k}</label><input name="${k}" value="${esc(c[k])}"></div>`).join("")}
+ <div class="field"><label>About</label><textarea name="About">${esc(c.About)}</textarea></div><div class="field"><label>Address</label><textarea name="Address">${esc(c.Address)}</textarea></div>
+ <button class="btn primary full">Save Changes</button></form></div></div>`,"Customer Edit Panel");
+ $("#ephoto").onchange=e=>{if(e.target.files[0])$("#eprev").src=URL.createObjectURL(e.target.files[0])};
+ $("#shareEdit").onclick=()=>navigator.share?.({url:C.PUBLIC_BASE+"?id="+c.CardID});
+ $("#editForm").onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{let data=Object.fromEntries(new FormData(e.target).entries());data.id=c.CardID;data.pin=pin;if($("#ephoto").files[0])data.photoData=await compressImage($("#ephoto").files[0]);await api("updateCard",data);toast("Card updated");setTimeout(()=>location.reload(),700)}catch(x){toast(x.message)}finally{b.disabled=false}};
+}
+function adminLogin(){
+ shell(`<div class="wrap"><div class="panel"><div class="title">Spark Admin</div><p class="hint">All clients manage karein: view, edit, stop/active, delete.</p><form id="alog" class="grid"><div class="field"><label>Admin Password</label><input name="password" type="password" required></div><button class="btn dark full">Open Admin</button></form></div></div>`,"Master Admin Panel");
+ $("#alog").onsubmit=async e=>{e.preventDefault();const password=new FormData(e.target).get("password");try{await loadAdmin(password)}catch(x){toast(x.message)}};
+}
+async function loadAdmin(password){
+ const list=await api("adminList",{password});
+ shell(`<div class="wrap"><div class="panel"><div class="title">All Clients</div><p class="hint">${list.length} cards found</p><div class="field"><input id="search" placeholder="Search name, business, mobile, ID"></div></div><div id="clients" class="list"></div></div>`,"Master Admin Panel");
+ const draw=q=>{$("#clients").innerHTML=list.filter(c=>JSON.stringify(c).toLowerCase().includes((q||"").toLowerCase())).map(c=>`<div class="client">
+ <div class="client-head"><div><h3>${esc(c.BusinessName||c.Name)}</h3><p>${esc(c.CardID)} • ${esc(c.Name)} • ${esc(c.Mobile)}</p><p>Valid: ${esc(c.ValidTill)}</p></div><span class="status ${esc(c.Status)}">${esc(c.Status)}</span></div>
+ <div class="actions" style="margin-top:10px"><button class="btn blue" data-act="view" data-id="${esc(c.CardID)}">View</button><button class="btn ghost" data-act="edit" data-id="${esc(c.CardID)}">Edit</button><button class="btn dark" data-act="toggle" data-id="${esc(c.CardID)}">${c.Status==="ACTIVE"?"Stop":"Active"}</button><button class="btn red" data-act="delete" data-id="${esc(c.CardID)}">Delete</button></div></div>`).join("")||`<div class="empty">No clients</div>`};
+ draw("");$("#search").oninput=e=>draw(e.target.value);
+ $("#clients").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const id=b.dataset.id,a=b.dataset.act;if(a==="view")return location.href="?id="+id;if(a==="edit"){const c=list.find(x=>x.CardID===id);return adminEdit(c,password)}if(a==="delete"&&!confirm("Permanently delete this card?"))return;try{await api("adminAction",{password,id,action:a});toast("Updated");setTimeout(()=>loadAdmin(password),500)}catch(x){toast(x.message)}};
+}
+function adminEdit(c,password){
+ shell(`<div class="wrap"><div class="panel"><div class="title">Admin Edit • ${esc(c.CardID)}</div><form id="aedit" class="grid">
+ ${["Name","BusinessName","Mobile","WhatsApp","Designation","Category","Tagline","Website","MapLink","Instagram","Facebook","ValidTill"].map(k=>`<div class="field"><label>${k}</label><input name="${k}" value="${esc(c[k])}"></div>`).join("")}
+ <div class="field"><label>About</label><textarea name="About">${esc(c.About)}</textarea></div><div class="field"><label>Address</label><textarea name="Address">${esc(c.Address)}</textarea></div>
+ <button class="btn primary full">Save</button><button type="button" class="btn ghost full" id="back">Back</button></form></div></div>`,"Master Admin Panel");
+ $("#back").onclick=()=>loadAdmin(password);
+ $("#aedit").onsubmit=async e=>{e.preventDefault();try{const fields=Object.fromEntries(new FormData(e.target).entries());await api("adminAction",{password,id:c.CardID,action:"edit",fields});toast("Saved");setTimeout(()=>loadAdmin(password),500)}catch(x){toast(x.message)}};
+}
+route();
